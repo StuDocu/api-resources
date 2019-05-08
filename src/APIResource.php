@@ -4,10 +4,11 @@ namespace Juampi92\APIResources;
 
 class APIResource
 {
+
     protected $path;
 
     /**
-     * API Resource constructor.
+     * API Resource constructor
      *
      * @param $path
      */
@@ -45,4 +46,5 @@ class APIResource
     {
         return forward_static_call_array([$this->path, 'collection'], $args);
     }
+
 }

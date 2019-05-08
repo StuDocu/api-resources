@@ -3,7 +3,6 @@
 namespace Juampi92\APIResources;
 
 use Exception;
-use Juampi92\APIResources\Exceptions\ResourceNotFoundException;
 
 class APIResourceManager
 {
@@ -18,72 +17,33 @@ class APIResourceManager
     /**
      * @var string
      */
-    protected $apiName;
+    protected $api_name;
     /**
      * @var string
      */
     protected $resources;
-    /**
-     * @var string
-     */
-    protected $latest;
-    /**
-     * @var string
-     */
-    protected $routePath;
 
     /**
-     * API Resource constructor.
+     * API Resource constructor
      *
      */
     public function __construct()
     {
-        $defaultName = config('api.default', null);
-        $latestVersion = $this->getConfig('version', $defaultName);
+        $name = config('api.default', null);
+        $v = $this->getConfig('api.version', $name);
 
-        if (!$latestVersion) {
+        if (!$v) {
             throw new Exception('You must define a config(\'api\') with a latest version. Do: php artisan vendor:publish --provider="Juampi92/APIResources/APIResourcesServiceProvider"');
         }
 
-        $this->latest = $latestVersion;
-        $this->setVersion($latestVersion, $defaultName);
+        $this->latest = $v;
+        $this->setVersion($v, $name);
     }
 
     /**
-     * Returns the name of the versioned route.
+     *  Get config considering the API name if present
      *
-     * @param string $route
-     * @return string
-     */
-    public function getRouteName($route)
-    {
-        if (!$this->routePath) {
-            // Grab route_prefix config first. If it's not set,
-            // grab the resources, and replace `\` with `.`, and
-            // transform it all to lowercase.
-            $this->routePath = $this->getConfig('route_prefix')
-                ?: str_replace('\\', '.', strtolower($this->getConfig('resources')));
-        }
-        return "{$this->routePath}.v{$this->current}" . str_after($route, $this->routePath);
-    }
-
-    /**
-     * Returns the versioned url.
-     *
-     * @param string $name
-     * @param array $parameters
-     * @param bool $absolute
-     * @return string
-     */
-    protected function getRoute($name, $parameters = [], $absolute = true)
-    {
-        return route($this->getRouteName($name), $parameters, $absolute);
-    }
-
-    /**
-     *  Get config considering the API name if present.
-     *
-     * @param string $cfg Config path
+     * @param string $cfg  Config path
      * @param string $name Name of api if present
      *
      * @return mixed The result of the config
@@ -91,44 +51,39 @@ class APIResourceManager
     protected function getConfig($cfg, $name = null)
     {
         if (is_null($name)) {
-            $name = $this->apiName;
+            $name = $this->api_name;
         }
 
-        $name = $name ? ".$name" : '';
-
-        return config("api.$cfg{$name}");
+        return config($cfg . ($name ? ".$name" : ''));
     }
 
     /**
-     * Sets the current API version.
+     * Sets the current API version
      *
      * @param string $current
-     * @param string $apiName = null
+     * @param string $api_name = null
      *
      * @return $this
      */
-    public function setVersion($current, $apiName = null)
+    public function setVersion($current, $api_name = null)
     {
-        // Reset pre-cached properties
         $this->current = $current;
-        $this->apiName = $apiName;
-
-        $this->routePath = null;
-        $this->latest = $this->getConfig('version');
+        $this->api_name = $api_name;
+        $this->latest = $this->getConfig('api.version');
 
         // Path can be only one or one for each api
         $this->path = config('api.resources_path');
         if (is_array($this->path)) {
-            $this->path = $this->getConfig('resources_path');
+            $this->path = $this->getConfig('api.resources_path');
         }
 
-        $this->resources = $this->getConfig('resources');
+        $this->resources = $this->getConfig('api.resources');
 
         return $this;
     }
 
     /**
-     * Gets the current API version.
+     * Gets the current API version
      *
      * @return string
      */
@@ -138,76 +93,40 @@ class APIResourceManager
     }
 
     /**
-     * Checks if the given version is the latest.
+     * Checks if the given version is the latest
      *
-     * @param string $current
-     *
-     * @return bool
-     */
-    public function isLatest($current = null)
-    {
-        if (!isset($current)) {
-            $current = $this->current;
-        }
-
-        return $this->latest === $current;
-    }
-
-    /**
-     * Returns the classname of the versioned resource,
-     * or it's latest version if it doesn't exist.
-     *
-     * Throws an exception if it cannot find it.
-     *
-     * @param string $classname
+     * @param string $c
      *
      * @return string
-     * @throws ResourceNotFoundException
      */
-    public function resolveClassname($classname)
+    public function isLatest($c = null)
     {
-        $path = $this->parseClassname($classname);
-
-        // Check if the resource was found
-        if (class_exists($path)) {
-            return $path;
+        if (!isset($c)) {
+            $c = $this->current;
         }
 
-        // If we are on the latest version, stop searching
-        if ($this->isLatest()) {
-            throw new Exceptions\ResourceNotFoundException($classname, $path);
-        }
-
-        // Search on the latest version
-        $path = $this->parseClassname($classname, true);
-
-        // If still does not exists, fail
-        if (!class_exists($path)) {
-            throw new Exceptions\ResourceNotFoundException($classname, $path);
-        }
-
-        return $path;
+        return $this->latest === $c;
     }
 
     /**
-     * Returns the classname with the version considering.
+     * Returns the classname with the version considering
      *
      * @param string $classname
      * @param bool $forceLatest Set to true if last version is required
      *
      * @return string
      */
-    protected function parseClassname($classname, $forceLatest = false)
+    public function resolveClassname($classname, $forceLatest = false)
     {
-        $version = $forceLatest ? $this->latest : $this->current;
+        $v = $forceLatest ? $this->latest : $this->current;
 
         if (!empty($this->resources)) {
-            $path = $this->resources . "\\v{$version}\\" . str_after($classname, $this->resources . "\\");
+            $path = $this->resources . "\\v{$v}\\" . str_after($classname, $this->resources . "\\");
         } else {
-            $path = "v{$version}\\" . $classname;
+            $path = "v{$v}\\" . $classname;
         }
 
-        $path = "\\{$this->path}\\{$path}";
+        $path = "\\" . $this->path . "\\" . $path;
 
         return $path;
     }
@@ -215,7 +134,7 @@ class APIResourceManager
     /**
      * Smart builds the classname using the correct version.
      * If it fails with the current version, it falls back to
-     * the latest version. If it still fails, throw exception.
+     * the latest version. If it still fails, throw exception
      *
      * @param string $classname
      *
